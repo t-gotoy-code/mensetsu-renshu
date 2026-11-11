@@ -1,0 +1,1043 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<base target="_top">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>AI面接練習</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<style>
+  :root { --blue:#1f6fe5; --blue-d:#1552b3; --ink:#1c2733; --sub:#5b6b7c; --line:#d5dfeb; --bg:#eef4fb; }
+  * { box-sizing:border-box; }
+  html, body { margin:0; height:100%; }
+  body { font-family:"Hiragino Sans","Yu Gothic UI","Meiryo",sans-serif; color:var(--ink); background:var(--bg); -webkit-text-size-adjust:100%; }
+  button, input, textarea, select { font:inherit; color:inherit; }
+  .screen { display:none; min-height:100%; }
+  .screen.on { display:block; }
+  header { background:var(--blue); color:#fff; padding:12px 16px; display:flex; align-items:center; gap:10px; }
+  header h1 { font-size:18px; margin:0; letter-spacing:.04em; }
+  header .tag { background:#fff; color:var(--blue); font-weight:700; font-size:13px; padding:2px 10px; border-radius:6px; }
+  header .right { margin-left:auto; font-size:13px; }
+  .wrap { max-width:920px; margin:0 auto; padding:16px; }
+
+  /* ---- 設定画面 ---- */
+  .card { background:#fff; border:1px solid var(--line); border-radius:14px; padding:16px; margin-bottom:14px; }
+  .card h2 { font-size:15px; margin:0 0 10px; }
+  .card h2 small { font-weight:400; color:var(--sub); margin-left:6px; }
+  .seg { display:flex; gap:8px; flex-wrap:wrap; }
+  .seg button { flex:1 1 0; min-width:92px; padding:11px 8px; border:2px solid var(--line); background:#fff; border-radius:10px; cursor:pointer; font-weight:600; }
+  .seg button.on { border-color:var(--blue); background:#e8f1ff; color:var(--blue-d); }
+  input[type=text], textarea { width:100%; padding:11px 12px; border:1.5px solid var(--line); border-radius:10px; background:#fff; font-size:16px; }
+  textarea { resize:vertical; min-height:84px; line-height:1.6; }
+  input:focus, textarea:focus, button:focus-visible { outline:3px solid #9cc3ff; outline-offset:1px; }
+  .cols { display:grid; grid-template-columns:1fr; gap:14px; }
+  .preview { height:230px; border-radius:12px; overflow:hidden; background:#cfe0f3; position:relative; }
+  .preview canvas { width:100%; height:100%; display:block; }
+  .photo { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; object-position:50% 20%; display:none; transform-origin:50% 70%; will-change:transform; }
+  .photo.on { display:block; }
+  .photo.layer { z-index:1; opacity:0; }
+  .pill, .status, .rec { z-index:2; }
+  .status.talk::after { content:""; display:inline-block; width:14px; height:10px; margin-left:6px; background:
+    linear-gradient(var(--blue),var(--blue)) 0 100%/3px 60% no-repeat, linear-gradient(var(--blue),var(--blue)) 5.5px 100%/3px 100% no-repeat, linear-gradient(var(--blue),var(--blue)) 11px 100%/3px 40% no-repeat; animation:bars .5s steps(2) infinite; }
+  @keyframes bars { 50% { transform:scaleY(.55); transform-origin:bottom; } }
+  .row { margin-bottom:12px; }
+  .row:last-child { margin-bottom:0; }
+  .row label { display:block; font-size:13px; color:var(--sub); margin-bottom:6px; }
+  .note { font-size:12.5px; color:var(--sub); line-height:1.7; margin:8px 0 0; }
+  .primary { width:100%; padding:15px; border:0; border-radius:12px; background:var(--blue); color:#fff; font-size:17px; font-weight:700; cursor:pointer; }
+  .primary:disabled { background:#9db4d3; cursor:default; }
+  .err { color:#b3261e; font-size:14px; margin:8px 0 0; min-height:1em; }
+
+  /* ---- 面接画面 ---- */
+  #interview.on { display:flex; flex-direction:column; height:100%; background:var(--blue); }
+  #interview header { padding:10px 14px; }
+  .stage { flex:1 1 auto; min-height:0; display:flex; flex-direction:column; gap:8px; padding:0 10px; }
+  .pane { position:relative; border:3px solid #fff; border-radius:18px; overflow:hidden; background:#22344d; min-height:0; }
+  #paneAI { flex:3 1 0; }
+  #paneMe { flex:2 1 0; }
+  .pane canvas, .pane video { width:100%; height:100%; display:block; object-fit:cover; }
+  #cam { transform:scaleX(-1); }
+  .pill { position:absolute; left:50%; bottom:8px; transform:translateX(-50%); background:rgba(20,28,40,.78); color:#fff; font-size:13px; font-weight:700; padding:3px 14px; border-radius:8px; white-space:nowrap; }
+  .status { position:absolute; top:8px; left:8px; background:rgba(255,255,255,.92); color:var(--blue-d); font-size:12.5px; font-weight:700; padding:3px 10px; border-radius:999px; }
+  .nocam { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; color:#c9d6e6; font-size:13px; text-align:center; padding:12px; }
+  .rec { position:absolute; top:8px; right:8px; background:#d93025; color:#fff; font-size:12.5px; font-weight:700; padding:3px 10px; border-radius:999px; display:none; }
+  .rec.on { display:block; }
+  .panel { flex:0 0 auto; background:#fff; margin-top:8px; border-radius:18px 18px 0 0; padding:12px 14px calc(12px + env(safe-area-inset-bottom)); }
+  .qtext { font-size:15.5px; line-height:1.7; min-height:3.4em; margin:0 0 10px; }
+  .qtext b { color:var(--blue-d); margin-right:6px; }
+  .btns { display:flex; gap:8px; flex-wrap:wrap; }
+  .btns button { flex:1 1 0; padding:13px 4px; font-size:15px; white-space:nowrap; border-radius:12px; border:2px solid var(--blue); background:#fff; color:var(--blue-d); font-weight:700; cursor:pointer; min-width:0; }
+  .btns button.fill { background:var(--blue); color:#fff; }
+  .btns button.stop { background:#d93025; border-color:#d93025; color:#fff; }
+  .btns button.ghost { border-color:var(--line); color:var(--sub); flex:0 0 auto; padding:13px 14px; }
+  .btns button:disabled { opacity:.45; cursor:default; }
+  #answerBox { display:none; margin-bottom:10px; }
+  #answerBox.on { display:block; }
+  #answerBox textarea { min-height:96px; max-height:30vh; }
+  .hint { font-size:12.5px; color:var(--sub); margin:6px 0 0; }
+
+  /* ---- 結果画面 ---- */
+  .scores { display:grid; grid-template-columns:1fr; gap:8px; }
+  .score { display:flex; align-items:center; gap:10px; font-size:14px; }
+  .score span:first-child { flex:0 0 9.5em; }
+  .bar { flex:1; height:12px; background:#e3ebf5; border-radius:6px; overflow:hidden; }
+  .bar i { display:block; height:100%; background:var(--blue); border-radius:6px; }
+  .score em { font-style:normal; font-weight:700; width:2.4em; text-align:right; font-variant-numeric:tabular-nums; }
+  .qa { border-top:1px solid var(--line); padding:12px 0; }
+  .qa:first-of-type { border-top:0; padding-top:0; }
+  .qa .q { font-weight:700; margin:0 0 6px; line-height:1.6; }
+  .qa .a { background:#f4f7fb; border-radius:10px; padding:10px 12px; margin:0 0 8px; line-height:1.7; font-size:14.5px; white-space:pre-wrap; }
+  .qa dl { margin:0; font-size:14.5px; line-height:1.7; }
+  .qa dt { font-weight:700; color:var(--blue-d); float:left; clear:left; width:5.2em; }
+  .qa dd { margin:0 0 4px 5.4em; }
+  .overall { line-height:1.8; margin:0; white-space:pre-wrap; }
+  ul.next { margin:0; padding-left:1.3em; line-height:1.8; }
+  .loading { text-align:center; padding:48px 16px; color:var(--sub); }
+  .spin { width:34px; height:34px; border:4px solid #cfdcec; border-top-color:var(--blue); border-radius:50%; margin:0 auto 14px; animation:sp 1s linear infinite; }
+  @keyframes sp { to { transform:rotate(360deg); } }
+
+  @media (min-width:760px) {
+    .cols { grid-template-columns:1fr 300px; align-items:start; }
+    .preview { height:300px; }
+    .stage { flex-direction:row; padding:0 16px; gap:14px; }
+    #paneAI, #paneMe { flex:1 1 0; }
+    #paneMe { order:-1; }
+    .panel { max-width:920px; width:100%; margin:12px auto 0; }
+    .scores { grid-template-columns:1fr 1fr; column-gap:24px; }
+  }
+  @media (prefers-reduced-motion:reduce) { .spin { animation:none; } }
+</style>
+</head>
+<body>
+
+<!-- ================= 設定画面 ================= -->
+<section id="setup" class="screen on">
+  <header><h1>面接練習</h1><span class="tag">AI面接官</span></header>
+  <div class="wrap">
+    <div class="cols">
+      <div>
+        <div class="card">
+          <h2>1. 面接の種類</h2>
+          <div class="seg" id="segType">
+            <button type="button" data-v="job" class="on">就職試験</button>
+            <button type="button" data-v="ao">総合型選抜</button>
+            <button type="button" data-v="suisen">学校推薦型</button>
+          </div>
+        </div>
+        <div class="card">
+          <h2>2. あなたについて</h2>
+          <div class="row" id="codeRow" style="display:none">
+            <label for="code">合言葉（先生から伝えられたもの）</label>
+            <input type="text" id="code" maxlength="30" autocomplete="off">
+          </div>
+          <div class="row">
+            <label for="sid">生徒番号（名前は入力しません）</label>
+            <input type="text" id="sid" inputmode="latin" maxlength="20" autocomplete="off">
+          </div>
+          <div class="row">
+            <label for="target" id="targetLabel">志望先（企業名・職種）</label>
+            <input type="text" id="target" maxlength="80" autocomplete="off">
+          </div>
+          <div class="row">
+            <label for="memo">志望理由・自己PRのメモ（書かなくても練習できます）</label>
+            <textarea id="memo" maxlength="600"></textarea>
+          </div>
+        </div>
+        <div class="card">
+          <h2>3. 質問の数</h2>
+          <div class="seg" id="segTotal">
+            <button type="button" data-v="4">4問<br><small>約5分</small></button>
+            <button type="button" data-v="6" class="on">6問<br><small>約8分</small></button>
+            <button type="button" data-v="8">8問<br><small>約10分</small></button>
+          </div>
+        </div>
+      </div>
+      <div>
+        <div class="card">
+          <h2>4. 面接官</h2>
+          <div class="preview"><canvas id="pv"></canvas><img id="pvPhoto" class="photo" alt=""></div>
+          <div class="row" style="margin-top:12px">
+            <div class="seg" id="segGender">
+              <button type="button" data-v="male" class="on">男性</button>
+              <button type="button" data-v="female">女性</button>
+            </div>
+          </div>
+          <div class="row">
+            <div class="seg" id="segAge">
+              <button type="button" data-v="young">若手</button>
+              <button type="button" data-v="middle" class="on">中堅</button>
+              <button type="button" data-v="senior">ベテラン</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <button type="button" class="primary" id="btnStart">面接を始める</button>
+    <p class="err" id="setupErr" role="alert"></p>
+    <p class="note">始めるとカメラとマイクの許可を求められます。カメラの映像は自分の画面に映るだけで、送信も保存もされません。話した声は文字にするためにAIサービスへ送られ、質問・回答・講評は先生が確認できるよう記録されます。</p>
+  </div>
+</section>
+
+<!-- ================= 面接画面 ================= -->
+<section id="interview" class="screen">
+  <header><h1>面接練習</h1><span class="tag" id="typeTag"></span><span class="right" id="progress"></span></header>
+  <div class="stage">
+    <div class="pane" id="paneAI">
+      <canvas id="av"></canvas>
+      <img id="avPhoto" class="photo" alt="">
+      <span class="status" id="aiStatus">準備中</span>
+      <span class="pill">AI面接官</span>
+    </div>
+    <div class="pane" id="paneMe">
+      <video id="cam" autoplay playsinline muted></video>
+      <div class="nocam" id="nocam">カメラは使われていません</div>
+      <span class="rec" id="rec">● 録音中 <span id="recTime">0:00</span></span>
+      <span class="pill">あなた</span>
+    </div>
+  </div>
+  <div class="panel">
+    <p class="qtext" id="qtext" aria-live="polite"></p>
+    <div id="answerBox">
+      <textarea id="answer" maxlength="1200" placeholder="ここに回答を入力します"></textarea>
+      <p class="hint" id="answerHint"></p>
+    </div>
+    <div class="btns" id="btns"></div>
+  </div>
+</section>
+
+<!-- ================= 結果画面 ================= -->
+<section id="result" class="screen">
+  <header><h1>面接練習</h1><span class="tag">講評</span></header>
+  <div class="wrap" id="resultBody"></div>
+</section>
+
+<script>
+'use strict';
+
+/* =========================================================
+   サーバー呼び出し（GASの外で開いたときは見本の応答を返します）
+   ========================================================= */
+/* ▼▼▼ 設定 ▼▼▼
+   API_URL  : GASを「ウェブアプリ」としてデプロイしたときのURL（https://script.google.com/macros/s/…/exec）
+   IMG_BASE : 面接官の写真を置いたフォルダ（index.html と同じ場所に images フォルダを置く場合はこのまま）
+   ▲▲▲▲▲▲▲▲▲ */
+const API_URL = '';
+const IMG_BASE = 'images/';
+
+const IN_GAS = typeof google !== 'undefined' && google.script && google.script.run;
+let accessCode = '';
+function api(name) {
+  const args = Array.prototype.slice.call(arguments, 1);
+  if (!IN_GAS && API_URL) {
+    return fetch(API_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ fn: name, args: args, code: accessCode }) })
+      .then(function (r) { if (!r.ok) throw new Error('サーバーに接続できませんでした（' + r.status + '）。'); return r.json(); },
+            function () { throw new Error('サーバーに接続できませんでした。通信環境を確認してください。'); })
+      .then(function (j) { if (!j.ok) throw new Error(j.error || 'エラーが発生しました。'); return j.result; });
+  }
+  if (!IN_GAS) return mockApi(name, args);
+  return new Promise(function (resolve, reject) {
+    const run = google.script.run.withSuccessHandler(resolve).withFailureHandler(function (e) {
+      reject(new Error(String((e && e.message) || e).replace(/^Error:\s*/, '')));
+    });
+    run[name].apply(run, args);
+  });
+}
+function mockApi(name, args) {
+  const qs = ['それでは面接を始めます。まず、志望した理由を教えてください。',
+    'ありがとうございます。そう考えるようになったきっかけを、具体的に教えてください。',
+    'ありがとうございます。高校生活で力を入れたことは何ですか。',
+    'そのとき、難しかったことと、どう乗り越えたかを教えてください。',
+    'あなたの長所と短所を教えてください。', '入ってから取り組みたいことは何ですか。',
+    '周りの人と協力した経験を教えてください。', '最後に、伝えておきたいことや質問はありますか。'];
+  return new Promise(function (resolve) {
+    setTimeout(function () {
+      if (name === 'nextQuestion') resolve({ question: qs[Math.min(args[0].history.length, qs.length - 1)] });
+      else if (name === 'transcribe') resolve({ text: '（見本）音声の文字起こし結果がここに入ります。' });
+      else resolve({
+        overall: '（見本の講評です）結論から話せており、聞き取りやすい構成でした。一方で、理由を支える具体的な場面が少ないため、経験を一つ入れると説得力が増します。',
+        scores: { '結論の明確さ': 4, '具体性': 2, '志望先との結びつき': 3, '言葉づかい': 4, '話の長さ': 3 },
+        items: args[0].history.map(function () { return { good: '結論を最初に述べています。', improve: '理由を支える場面を一つ加えましょう。', example: '「〜という経験から、〜と考えるようになりました」' }; }),
+        next: ['結論→理由→具体例の順で話す', '1つの回答は30秒〜1分にまとめる', '志望先でやりたいことを一文で言えるようにする']
+      });
+    }, 900);
+  });
+}
+
+/* =========================================================
+   3D面接官（コードだけで生成・実写寄りの造形）
+   ========================================================= */
+const LOOKS = {
+  male:   { young:  { hair:0x17130f, suit:0x2b3345, tie:0x27477a, skin:0xe6bd9c },
+            middle: { hair:0x1c1714, suit:0x1b2132, tie:0x6d1f2a, skin:0xdcb08c },
+            senior: { hair:0x9a9da3, suit:0x2a2c31, tie:0x3a3f63, skin:0xd6a988 } },
+  female: { young:  { hair:0x1f1510, suit:0x232b3e, tie:0, skin:0xedc8ab },
+            middle: { hair:0x2b1d15, suit:0x3a3640, tie:0, skin:0xe6bd9e },
+            senior: { hair:0x8f9197, suit:0x26302f, tie:0, skin:0xdfb394 } }
+};
+
+function Avatar(canvas) {
+  const T = THREE;
+  const self = this;
+  this.ok = false;
+  if (typeof THREE === 'undefined') return;
+  let renderer;
+  try { renderer = new T.WebGLRenderer({ canvas: canvas, antialias: true }); } catch (e) { return; }
+  this.ok = true;
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  renderer.outputEncoding = T.sRGBEncoding;
+  renderer.toneMapping = T.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.12;
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = T.PCFSoftShadowMap;
+
+  const lin = function (c) { return new T.Color(c).convertSRGBToLinear(); };
+  const mat = function (c, r, extra) {
+    const m = new T.MeshStandardMaterial({ color: lin(c), roughness: r == null ? 0.75 : r, metalness: 0 });
+    if (extra) Object.keys(extra).forEach(function (k) { m[k] = extra[k]; });
+    return m;
+  };
+  const mesh = function (g, m, x, y, z) { const o = new T.Mesh(g, m); o.position.set(x || 0, y || 0, z || 0); o.castShadow = true; o.receiveShadow = true; return o; };
+  const G = function (a) { return Math.exp(-a); };
+  const sq = function (a) { return a * a; };
+  const sstep = function (a, b, x) { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
+
+  const scene = new T.Scene();
+  scene.background = lin(0xc9d6e4);
+  const camera = new T.PerspectiveCamera(24, 1, 0.1, 30);
+  scene.add(new T.HemisphereLight(0xeaf2ff, 0x8d8478, 0.75));
+  const key = new T.DirectionalLight(0xfff4e6, 1.25); key.position.set(1.5, 2.4, 1.9);
+  key.castShadow = true; key.shadow.mapSize.set(1024, 1024);
+  key.shadow.camera.left = -0.6; key.shadow.camera.right = 0.6; key.shadow.camera.top = 0.6; key.shadow.camera.bottom = -0.6;
+  key.shadow.camera.near = 0.5; key.shadow.camera.far = 6; key.shadow.bias = -0.0006; key.shadow.normalBias = 0.006; key.shadow.radius = 4;
+  key.target.position.set(0, 1.3, 0); scene.add(key); scene.add(key.target);
+  const fill = new T.DirectionalLight(0xdfe9ff, 0.45); fill.position.set(-2, 1.4, 1.6); scene.add(fill);
+  const rim = new T.DirectionalLight(0xffffff, 0.7); rim.position.set(-0.8, 2.2, -2.2); scene.add(rim);
+
+  // ---- 部屋（ピントの外れた窓の景色・机） ----
+  (function room() {
+    const c = document.createElement('canvas'); c.width = 192; c.height = 96;   // 低解像度で描いて拡大＝ぼかし
+    const g = c.getContext('2d');
+    const sky = g.createLinearGradient(0, 0, 0, 96); sky.addColorStop(0, '#a9c9ea'); sky.addColorStop(1, '#eef4f8');
+    g.fillStyle = sky; g.fillRect(0, 0, 192, 96);
+    const hs = [40, 28, 52, 22, 38, 60, 30, 46, 24, 50, 34, 56];
+    for (let i = 0; i < hs.length; i++) { g.fillStyle = ['#aebdcc', '#9fb0c2', '#bcc8d4'][i % 3]; g.fillRect(i * 17 - 4, 78 - hs[i], 15, hs[i]); }
+    g.fillStyle = '#8aa58c'; g.fillRect(0, 74, 192, 6);
+    g.fillStyle = '#d9d5cf'; g.fillRect(0, 78, 192, 18);                              // 腰壁
+    g.fillStyle = '#f1f1ef'; [30, 94, 158].forEach(function (x) { g.fillRect(x, 0, 5, 80); }); // 窓枠
+    g.fillStyle = '#e4e2de'; g.fillRect(0, 0, 192, 5);
+    const tex = new T.CanvasTexture(c); tex.encoding = T.sRGBEncoding;
+    const bg = new T.Mesh(new T.PlaneGeometry(6.4, 3.2), new T.MeshBasicMaterial({ map: tex, toneMapped: false }));
+    bg.position.set(0, 1.55, -2.2); scene.add(bg);
+    const top = mesh(new T.BoxGeometry(2.8, 0.04, 0.9), mat(0x6b4a34, 0.45), 0, 1.0, 0.47); top.castShadow = false; scene.add(top);
+    const front = mesh(new T.BoxGeometry(2.8, 0.95, 0.04), mat(0x5b3f2d, 0.6), 0, 0.49, 0.9); scene.add(front);
+    const paper = mesh(new T.BoxGeometry(0.21, 0.003, 0.297), mat(0xffffff, 0.9), 0.3, 1.0215, 0.5); paper.rotation.y = -0.18; scene.add(paper);
+    const pen = mesh(new T.CylinderGeometry(0.004, 0.004, 0.14, 8), mat(0x1c1c22, 0.3), 0.44, 1.025, 0.5); pen.rotation.set(Math.PI / 2, 0, 0.5); scene.add(pen);
+  })();
+
+  let root = null, head, lids = [], mouth, armR;
+  this.state = 'idle';
+  let talk = 0, blinkAt = 1.5, nodAt = 2.5, nodT = -1, blinkT = 1;
+
+  // ---- 頭の形（球を変形して顔の凹凸を作る） ----
+  function headFn(f, age) {
+    const rx = 0.0765, ryT = 0.108, ryB = 0.118, rzF = 0.094, rzB = 0.1;
+    const jaw = f ? 0.37 : 0.27, brow = f ? 0.0006 : 0.0026, fold = age === 'young' ? 0 : age === 'middle' ? 0.0011 : 0.002;
+    const fn = function (dx, dy, dz) {
+      const t = Math.max(0, -dy);
+      let px = dx * rx * (1 - jaw * Math.pow(t, 1.7));
+      const py = dy * (dy > 0 ? ryT : ryB);
+      let pz = dz > 0 ? rzF * Math.pow(dz, 0.8) * (1 - 0.05 * t * t) : dz * rzB * (1 - 0.3 * t);
+      if (dz > 0.2) {
+        const ax = Math.abs(px), w = sstep(0.2, 0.45, dz);
+        let d = 0;
+        d -= 0.0075 * G(sq((ax - 0.032) / 0.017) + sq((py - 0.012) / 0.011));            // 眼窩
+        d += brow * G(sq((py - 0.034) / 0.009)) * G(Math.pow(px / 0.06, 4));               // 眉骨
+        d += 0.006 * G(sq(px / 0.0075) + sq((py - 0.008) / 0.022));                        // 鼻筋
+        d += 0.011 * G(sq(px / 0.008) + sq((py + 0.006) / 0.016));
+        d += (f ? 0.015 : 0.017) * G(sq(px / 0.0105) + sq((py + 0.02) / 0.0115));          // 鼻先
+        d += 0.0055 * G(sq((ax - 0.012) / 0.006) + sq((py + 0.026) / 0.006));              // 小鼻
+        d += 0.0034 * G(sq(px / 0.02) + sq((py + 0.0525) / 0.0045));                       // 上唇
+        d += 0.0044 * G(sq(px / 0.017) + sq((py + 0.0645) / 0.0055));                      // 下唇
+        d -= 0.0024 * G(sq(px / 0.024) + sq((py + 0.0582) / 0.0026));                      // 口の線
+        d += 0.004 * G(sq(px / 0.02) + sq((py + 0.096) / 0.014));                          // あご
+        d += 0.002 * G(sq((ax - 0.045) / 0.02) + sq((py + 0.008) / 0.02));                 // 頬骨
+        if (fold) d -= fold * G(sq((ax - (0.017 + (-py - 0.028) * 0.38)) / 0.0035)) * sstep(-0.026, -0.034, py) * sstep(-0.07, -0.058, py); // ほうれい線
+        if (age === 'senior') d -= 0.0012 * G(sq((ax - 0.032) / 0.014) + sq((py + 0.004) / 0.004)); // 目の下
+        pz += d * w;
+      }
+      return [px, py, pz];
+    };
+    fn.surf = function (px, py) {
+      let dx = px / rx, dy = py / (py > 0 ? ryT : ryB), p = null;
+      for (let i = 0; i < 8; i++) {
+        const dz = Math.sqrt(Math.max(0.01, 1 - dx * dx - dy * dy));
+        p = fn(dx, dy, dz); dx += (px - p[0]) / rx * 0.9; dy += (py - p[1]) / ryB * 0.9;
+      }
+      return p[2];
+    };
+    fn.r = { rx: rx, ryT: ryT, ryB: ryB, rzF: rzF, rzB: rzB };
+    return fn;
+  }
+
+  // ---- 髪（頭より少し大きい殻を、生え際の線で切り取る） ----
+  function hairGeo(f, age) {
+    const male = { young: [0.55, 0.14, -0.5], middle: [0.6, 0.14, -0.5], senior: [0.7, 0.16, -0.48] };
+    const line = function (a, dy) { // a = 正面からの角度（0〜π）
+      if (!f) {
+        const m = male[age];
+        let h = m[0] + (age === 'senior' ? 0.1 : 0.05) * G(sq((a - 0.62) / 0.2));            // そり込み
+        h = h + (m[1] - h) * sstep(0.75, 1.25, a);
+        h -= 0.2 * G(sq((a - 1.32) / 0.12));                                                 // もみあげ
+        return h + (m[2] - h) * sstep(1.7, 2.3, a);
+      }
+      if (age === 'young') return a < 0.78 ? 0.36 - 0.03 * Math.cos(a * 9) : -0.86;          // 前髪ぱっつん＋ロング
+      if (age === 'middle') return a < 0.72 ? 0.5 : -0.8;                                    // ボブ
+      const h = 0.56 + (0.02 - 0.56) * sstep(0.7, 1.2, a); return h + (-0.5 - h) * sstep(1.7, 2.3, a); // ショート
+    };
+    const len = f ? (age === 'young' ? 2.25 : age === 'middle' ? 1.3 : 1) : 1;
+    const vol = f ? (age === 'senior' ? 0.02 : 0.013) : (age === 'young' ? 0.019 : age === 'middle' ? 0.015 : 0.009);
+    const src = new T.SphereGeometry(1, 140, 100);
+    const pos = src.attributes.position, idx = src.index.array;
+    const P = new Float32Array(pos.count * 3), C = new Float32Array(pos.count * 3), keep = [];
+    const dirs = [];
+    for (let i = 0; i < pos.count; i++) {
+      const dx = pos.getX(i), dy = pos.getY(i), dz = pos.getZ(i);
+      dirs.push(dx, dy, dz);
+      const a = Math.abs(Math.atan2(dx, dz));
+      let px, py, pz;
+      const hang = f && age !== 'senior' && dy < 0;
+      const k = hang ? 1 / Math.max(0.35, Math.sqrt(1 - dy * dy)) : 1;                       // 下は筒状にして髪を垂らす
+      const th = vol * (0.55 + 0.75 * Math.max(0, dy)) + (f && age === 'middle' && dy > 0.3 ? 0.004 * Math.max(0, Math.sin(Math.atan2(dx, dz) + 0.5)) : 0);
+      px = dx * k * (0.0765 + th); pz = dz * k * ((dz > 0 ? 0.094 : 0.1) + th);
+      py = dy * ((dy > 0 ? 0.108 : 0.118 * (hang ? len : 1)) + th);
+      if (hang) { const s = 1 - 0.1 * sstep(-0.3, -0.9, dy) * (age === 'middle' ? 1.6 : 0.4); px *= s; pz *= s; pz -= 0.012 * sstep(0, -0.8, dy); }
+      P[i * 3] = px; P[i * 3 + 1] = py; P[i * 3 + 2] = pz;
+      const n = Math.sin(Math.atan2(dx, dz) * 61) * 0.5 + Math.sin(Math.atan2(dx, dz) * 23 + 1.3) * 0.5;   // 毛流れ
+      const sh = 1 + 0.16 * n;
+      C[i * 3] = sh; C[i * 3 + 1] = sh; C[i * 3 + 2] = sh;
+    }
+    for (let i = 0; i < idx.length; i += 3) {
+      const a0 = idx[i] * 3, b0 = idx[i + 1] * 3, c0 = idx[i + 2] * 3;
+      const dx = (dirs[a0] + dirs[b0] + dirs[c0]) / 3, dy = (dirs[a0 + 1] + dirs[b0 + 1] + dirs[c0 + 1]) / 3, dz = (dirs[a0 + 2] + dirs[b0 + 2] + dirs[c0 + 2]) / 3;
+      if (dy > line(Math.abs(Math.atan2(dx, dz)), dy)) keep.push(idx[i], idx[i + 1], idx[i + 2]);
+    }
+    const g = new T.BufferGeometry();
+    g.setAttribute('position', new T.BufferAttribute(P, 3));
+    g.setAttribute('color', new T.BufferAttribute(C, 3));
+    g.setIndex(keep); g.computeVertexNormals();
+    return g;
+  }
+
+  this.build = function (gender, age) {
+    if (root) { scene.remove(root); root.traverse(function (o) { if (o.geometry) o.geometry.dispose(); }); }
+    const L = LOOKS[gender][age];
+    const f = gender === 'female';
+    const skinC = lin(L.skin);
+    const skin = mat(L.skin, 0.58), suit = mat(L.suit, 0.82), white = mat(0xf4f5f7, 0.7);
+    const hairM = mat(L.hair, 0.42, { vertexColors: true, side: T.DoubleSide });
+    root = new T.Group(); scene.add(root);
+
+    // ---- 胴体（スーツ。胸元のV字はシャツの色） ----
+    const sh = f ? 0.172 : 0.198;
+    const prof = [[1.415, 0.046], [1.385, 0.07], [1.36, 0.115], [1.335, sh * 0.9], [1.3, sh], [1.2, sh * 1.0], [1.05, sh * 0.95], [0.9, sh * 0.9], [0.84, sh * 0.88]];
+    const curve = new T.SplineCurve(prof.map(function (p) { return new T.Vector2(p[1], p[0]); }));
+    const pts = curve.getPoints(48);
+    const ZS = f ? 0.56 : 0.6;
+    const Rat = function (y) { for (let i = 1; i < pts.length; i++) { if (y >= pts[i].y) { const a = pts[i - 1], b = pts[i]; return a.x + (b.x - a.x) * (a.y - y) / Math.max(1e-6, a.y - b.y); } } return pts[pts.length - 1].x; };
+    const chestZ = function (x, y) { const R = Rat(y); return Math.sqrt(Math.max(0, R * R - x * x)) * ZS + (f ? 0.012 * G(sq((y - 1.2) / 0.07)) : 0.006 * G(sq((y - 1.22) / 0.09))); };
+    const vBottom = f ? 1.16 : 1.1, vTop = 1.392, vHalf = f ? 0.05 : 0.052;
+    const vEdge = function (y) { return vHalf * sstep(vBottom, vTop, y) + 0.001; };
+    const tg = new T.LatheGeometry(pts.slice().reverse(), 220);
+    (function () {
+      const p = tg.attributes.position, col = new Float32Array(p.count * 3), sc = lin(L.suit), wc = lin(f ? 0xf6f3ee : 0xf2f4f8);
+      for (let i = 0; i < p.count; i++) {
+        const x = p.getX(i), y = p.getY(i), z0 = p.getZ(i);
+        p.setZ(i, z0 > 0 ? chestZ(x, y) * (Math.abs(x) < 1e-6 && z0 < 1e-6 ? 0 : 1) : z0 * ZS * 0.92);
+        const c = sc; col[i * 3] = c.r; col[i * 3 + 1] = c.g; col[i * 3 + 2] = c.b;
+      }
+      tg.setAttribute('color', new T.BufferAttribute(col, 3)); tg.computeVertexNormals();
+    })();
+    root.add(mesh(tg, new T.MeshStandardMaterial({ vertexColors: true, roughness: 0.8 })));
+
+    // 表面に沿う薄いパーツ（襟・ネクタイ）を作る
+    const patch = function (poly, m, lift, n) {
+      const shape = new T.Shape(poly.map(function (p) { return new T.Vector2(p[0], p[1]); }));
+      const g = new T.ShapeGeometry(shape);
+      // 細かく分割して曲面になじませる
+      let geo = g.toNonIndexed();
+      for (let k = 0; k < (n || 2); k++) {
+        const a = geo.attributes.position.array, out = [];
+        for (let i = 0; i < a.length; i += 9) {
+          const A = [a[i], a[i + 1]], B = [a[i + 3], a[i + 4]], Cc = [a[i + 6], a[i + 7]];
+          const ab = [(A[0] + B[0]) / 2, (A[1] + B[1]) / 2], bc = [(B[0] + Cc[0]) / 2, (B[1] + Cc[1]) / 2], ca = [(Cc[0] + A[0]) / 2, (Cc[1] + A[1]) / 2];
+          [[A, ab, ca], [ab, B, bc], [ca, bc, Cc], [ab, bc, ca]].forEach(function (t) { t.forEach(function (v) { out.push(v[0], v[1], 0); }); });
+        }
+        geo = new T.BufferGeometry(); geo.setAttribute('position', new T.Float32BufferAttribute(out, 3));
+      }
+      const p = geo.attributes.position;
+      for (let i = 0; i < p.count; i++) p.setZ(i, chestZ(p.getX(i), p.getY(i)) + lift);
+      geo.computeVertexNormals();
+      const o = mesh(geo, m); m.side = T.DoubleSide; return o;
+    };
+    root.add(patch([[0, vBottom], [vEdge(vTop) + 0.012, vTop + 0.004], [-vEdge(vTop) - 0.012, vTop + 0.004]], mat(f ? 0xf6f3ee : 0xf2f4f8, 0.75), 0.002, 4));
+    const lapelM = mat(new T.Color(L.suit).multiplyScalar(1.12).getHex(), 0.74);
+    [-1, 1].forEach(function (s) {
+      const P = f
+        ? [[0.004, vBottom - 0.01], [vEdge(1.34) , 1.34], [0.078, 1.365], [0.088, 1.3], [0.04, vBottom + 0.03]]
+        : [[0.004, vBottom - 0.012], [vEdge(1.35), 1.35], [0.082, 1.372], [0.1, 1.325], [0.08, 1.305], [0.096, 1.285], [0.038, vBottom + 0.035]];
+      root.add(patch(P.map(function (p) { return [p[0] * s, p[1]]; }), lapelM, 0.0045, 3));
+      if (!f) root.add(patch([[0.002, 1.356], [0.03, 1.405], [0.058, 1.392], [0.046, 1.345], [0.02, 1.322]].map(function (p) { return [p[0] * s, p[1]]; }), white, 0.0075, 2)); // シャツの襟
+      else root.add(patch([[0.006, 1.335], [0.03, 1.4], [0.056, 1.388], [0.04, 1.34]].map(function (p) { return [p[0] * s, p[1]]; }), white, 0.007, 2));
+    });
+    if (L.tie) {
+      const tm = mat(L.tie, 0.55);
+      root.add(patch([[-0.013, 1.352], [0.013, 1.352], [0.0095, 1.322], [-0.0095, 1.322]], tm, 0.0125, 1));                           // 結び目
+      root.add(patch([[-0.0095, 1.324], [0.0095, 1.324], [0.024, 1.13], [0, 1.1], [-0.024, 1.13]], tm, 0.0065, 3));                   // 大剣
+    } else {
+      root.add(mesh(new T.SphereGeometry(0.0035, 10, 8), mat(0xd9c27a, 0.3, { metalness: 0.8 }), 0, 1.3, chestZ(0, 1.3) + 0.004));     // 小さなペンダント
+    }
+    if (!f) [1.06].forEach(function (y) { if (y < vBottom) { const bt = mesh(new T.CylinderGeometry(0.007, 0.007, 0.003, 14), mat(0x15171c, 0.4), 0.004, y, chestZ(0, y) + 0.002); bt.rotation.x = Math.PI / 2; root.add(bt); } });
+
+    // ---- 腕と手 ----
+    const limb = function (a, b, r1, r2, m) {
+      const A = new T.Vector3(a[0], a[1], a[2]), B = new T.Vector3(b[0], b[1], b[2]), d = B.clone().sub(A);
+      const o = mesh(new T.CylinderGeometry(r2, r1, d.length(), 20), m);
+      o.position.copy(A).add(B).multiplyScalar(0.5); o.quaternion.setFromUnitVectors(new T.Vector3(0, 1, 0), d.normalize());
+      return o;
+    };
+    const ar = f ? 0.04 : 0.047;
+    [-1, 1].forEach(function (s) {
+      const g = new T.Group();
+      const S0 = [s * (sh - 0.02), 1.272, 0], E = [s * (sh + 0.045), 1.085, 0.09], W = [s * 0.075, 1.055, 0.37];
+      g.add(mesh(new T.SphereGeometry(ar * 1.1, 20, 14), suit, S0[0], S0[1], S0[2]));
+      g.add(limb(S0, E, ar * 1.08, ar, suit));
+      g.add(mesh(new T.SphereGeometry(ar * 1.0, 16, 12), suit, E[0], E[1], E[2]));
+      g.add(limb(E, W, ar, ar * 0.74, suit));
+      g.add(limb(W, [s * 0.058, 1.053, 0.392], ar * 0.7, ar * 0.66, white));                                                       // 袖口
+      const palm = mesh(new T.SphereGeometry(0.036, 20, 14), skin, s * 0.022, 1.052, 0.425); palm.scale.set(1.15, 0.62, 1.0); palm.rotation.y = s * -0.5; g.add(palm);
+      for (let i = 0; i < 4; i++) {                                                                                                   // 組んだ指
+        const fz = 0.404 + i * 0.016 + (s > 0 ? 0.008 : 0);
+        const fg = limb([s * 0.03, 1.062, fz], [s * -0.03, 1.06, fz + 0.004], 0.0082, 0.0074, skin); g.add(fg);
+        g.add(mesh(new T.SphereGeometry(0.0076, 8, 6), skin, s * -0.03, 1.06, fz + 0.004));
+      }
+      root.add(g); if (s === 1) armR = g;
+    });
+
+    // ---- 首 ----
+    const neck = mesh(new T.CylinderGeometry(f ? 0.041 : 0.049, f ? 0.046 : 0.055, 0.13, 28), skin, 0, 1.385, 0.002); neck.rotation.x = 0.1; root.add(neck);
+
+    // ---- 頭 ----
+    head = new T.Group(); head.position.set(0, 1.39, 0); head.scale.setScalar(1.07); root.add(head);
+    const HC = new T.Group(); HC.position.set(0, 0.118, 0.014); head.add(HC);
+    const fn = headFn(f, age);
+    const hg = new T.SphereGeometry(1, 220, 160);
+    (function () {
+      const p = hg.attributes.position, col = new Float32Array(p.count * 3);
+      const lip = lin(f ? 0xbf5f62 : 0xa9675f), blush = lin(0xd9806f), dark = skinC.clone().multiplyScalar(0.72), beard = lin(0x6f6f78);
+      const c = new T.Color();
+      for (let i = 0; i < p.count; i++) {
+        const dx = p.getX(i), dy = p.getY(i), dz = p.getZ(i), q = fn(dx, dy, dz);
+        p.setXYZ(i, q[0], q[1], q[2]);
+        c.copy(skinC);
+        if (dz > 0.2) {
+          const ax = Math.abs(q[0]), py = q[1];
+          c.lerp(dark, 0.3 * G(sq((ax - 0.032) / 0.016) + sq((py - 0.013) / 0.009)));
+          c.lerp(blush, (f ? 0.2 : 0.1) * G(sq((ax - 0.041) / 0.018) + sq((py + 0.024) / 0.017)));
+          c.lerp(blush, 0.1 * G(sq(q[0] / 0.012) + sq((py + 0.02) / 0.012)));
+          c.lerp(dark, 0.22 * G(sq((ax - 0.013) / 0.004) + sq((py + 0.012) / 0.016)));
+          c.lerp(dark, 0.55 * G(sq((ax - 0.0075) / 0.0035) + sq((py + 0.0305) / 0.0025)));
+          if (!f) c.lerp(beard, (age === 'young' ? 0.05 : 0.09) * sstep(-0.03, -0.06, py) * G(Math.pow(q[0] / 0.05, 4)));
+          const up = G(sq(q[0] / 0.021) + sq((py + 0.0538) / 0.0036)), lo = G(sq(q[0] / 0.017) + sq((py + 0.0638) / 0.0046));
+          c.lerp(lip, Math.min(1, (up + lo) * 1.5) * (f ? 0.9 : 0.6));
+        }
+        col[i * 3] = c.r; col[i * 3 + 1] = c.g; col[i * 3 + 2] = c.b;
+      }
+      hg.setAttribute('color', new T.BufferAttribute(col, 3)); hg.computeVertexNormals();
+    })();
+    HC.add(mesh(hg, new T.MeshStandardMaterial({ vertexColors: true, roughness: 0.56 })));
+
+    // 耳
+    [-1, 1].forEach(function (s) {
+      const ear = mesh(new T.SphereGeometry(0.02, 16, 12), skin, s * 0.0755, 0.002, -0.006); ear.scale.set(0.34, 1.5, 0.85); ear.rotation.set(0, s * -0.35, s * -0.12); HC.add(ear);
+    });
+    // 目
+    lids = [];
+    const eyeW = mat(0xf3f1ee, 0.25), irisM = mat(0x3a2415, 0.2), pupM = mat(0x070707, 0.1);
+    const lidM = new T.MeshStandardMaterial({ color: skinC.clone().multiplyScalar(0.9), roughness: 0.6 });
+    const lash = mat(0x18110d, 0.6);
+    [-1, 1].forEach(function (s) {
+      const ex = s * 0.032, ey = 0.012, er = 0.0128, ez = fn.surf(ex, ey) - 0.0062;
+      const eg = new T.Group(); eg.position.set(ex, ey, ez); HC.add(eg);
+      const ball = mesh(new T.SphereGeometry(er, 24, 18), eyeW); ball.castShadow = false; eg.add(ball);
+      const iris = mesh(new T.SphereGeometry(0.0062, 20, 14), irisM, 0, 0, er - 0.0031); iris.scale.z = 0.55; iris.castShadow = false; eg.add(iris);
+      const pup = mesh(new T.SphereGeometry(0.0027, 14, 10), pupM, 0, 0, er - 0.0002); pup.scale.z = 0.4; pup.castShadow = false; eg.add(pup);
+      const hl = new T.Mesh(new T.SphereGeometry(0.0011, 8, 6), new T.MeshBasicMaterial({ color: 0xffffff })); hl.position.set(0.0022, 0.0026, er + 0.0006); eg.add(hl);
+      const up = new T.Group(); eg.add(up);
+      const upCap = mesh(new T.SphereGeometry(er + 0.0011, 24, 12, 0, Math.PI * 2, 0, Math.PI * 0.46), lidM); upCap.castShadow = false; up.add(upCap);
+      const rr = (er + 0.0011) * Math.sin(Math.PI * 0.46), ry = (er + 0.0011) * Math.cos(Math.PI * 0.46);
+      const ln = new T.Mesh(new T.TorusGeometry(rr, f ? 0.00085 : 0.0006, 6, 28, Math.PI), lash); ln.rotation.x = Math.PI / 2; ln.position.y = ry; up.add(ln);
+      const lo = mesh(new T.SphereGeometry(er + 0.0009, 24, 10, 0, Math.PI * 2, Math.PI * 0.6, Math.PI * 0.4), lidM); lo.rotation.x = 0.06; lo.castShadow = false; eg.add(lo);
+      lids.push(up);
+      // まゆ
+      const pts2 = [[0.011, 0.0335], [0.024, f ? 0.0385 : 0.0375], [0.04, f ? 0.04 : 0.038], [0.053, 0.0335]].map(function (p) { return new T.Vector3(s * p[0], p[1], fn.surf(s * p[0], p[1]) + 0.0012); });
+      const brow = new T.Mesh(new T.TubeGeometry(new T.CatmullRomCurve3(pts2), 16, f ? 0.0015 : 0.0024, 6), mat(age === 'senior' ? 0x77777c : L.hair, 0.8));
+      brow.scale.z = 0.6; brow.position.z = pts2[1].z * 0.4; HC.add(brow);
+    });
+    // 口（話すときに開く）
+    mouth = new T.Mesh(new T.SphereGeometry(1, 20, 12), mat(0x3a1512, 0.6));
+    mouth.position.set(0, -0.0585, fn.surf(0, -0.0585) + 0.0004); mouth.scale.set(0.019, 0.0009, 0.0016); HC.add(mouth);
+    self._mz = mouth.position.z;
+
+    // 髪
+    const hm = mesh(hairGeo(f, age), hairM); HC.add(hm);
+
+    if (age === 'senior') { // めがね
+      const gm = mat(f ? 0x6b3b2c : 0x1d1e22, 0.35);
+      const gz = fn.surf(0.032, 0.012) + 0.012;
+      [-1, 1].forEach(function (s) {
+        const rim = mesh(new T.TorusGeometry(0.021, 0.0013, 8, 36), gm, s * 0.0325, 0.011, gz); rim.scale.set(1.12, 0.86, 1); HC.add(rim);
+        HC.add(limb([s * 0.056, 0.014, gz], [s * 0.079, 0.016, -0.005], 0.0011, 0.0011, gm));
+      });
+      HC.add(limb([-0.0095, 0.014, gz], [0.0095, 0.014, gz], 0.0011, 0.0011, gm));
+    }
+  };
+
+  function resize() {
+    const w = canvas.clientWidth, h = canvas.clientHeight;
+    if (!w || !h) return;
+    renderer.setSize(w, h, false);
+    camera.aspect = w / h;
+    const tan = Math.tan(12 * Math.PI / 180);
+    const dist = Math.max(0.37 / tan, 0.31 / (tan * camera.aspect));
+    camera.position.set(0, 1.43, dist + 0.2);
+    camera.lookAt(0, 1.325, 0.1);
+    camera.updateProjectionMatrix();
+  }
+  if (window.ResizeObserver) new ResizeObserver(resize).observe(canvas); else window.addEventListener('resize', resize);
+  this.resize = resize;
+
+  const clock = new T.Clock();
+  const calm = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  function tick() {
+    requestAnimationFrame(tick);
+    if (!root || !canvas.clientWidth) return;
+    const dt = Math.min(clock.getDelta(), 0.1), t = clock.elapsedTime;
+    const st = self.state;
+    // まばたき
+    blinkAt -= dt;
+    if (blinkAt < 0) { blinkAt = 2.4 + Math.random() * 3.2; blinkT = 0; }
+    blinkT = Math.min(1, blinkT + dt / 0.16);
+    const cl = Math.sin(blinkT * Math.PI);
+    lids.forEach(function (l) { l.rotation.x = -0.34 + cl * 0.98 + (st === 'thinking' ? 0.22 : 0); });
+    // 口
+    const tgt = st === 'talking' ? 0.25 + 0.75 * Math.abs(Math.sin(t * 10.5) * Math.sin(t * 3.7 + 1)) : 0;
+    talk += (tgt - talk) * Math.min(1, dt * 20);
+    mouth.scale.y = 0.0009 + talk * 0.0042; mouth.scale.x = 0.019 - talk * 0.003; mouth.scale.z = 0.0016 + talk * 0.002;
+    mouth.position.y = -0.0585 - talk * 0.0022;
+    // 頭の動き
+    let rx = 0, ry = 0, rz = 0;
+    if (!calm) { ry = Math.sin(t * 0.5) * 0.03; rz = Math.sin(t * 0.37) * 0.012; root.position.y = Math.sin(t * 1.3) * 0.002; }
+    if (st === 'talking') rx = Math.sin(t * 2.3) * 0.022;
+    if (st === 'listening') {
+      nodAt -= dt;
+      if (nodAt < 0) { nodAt = 2.5 + Math.random() * 3; nodT = 0; }
+      if (nodT >= 0) { nodT += dt; rx = Math.sin(Math.min(nodT / 0.7, 1) * Math.PI) * 0.13; if (nodT > 0.7) nodT = -1; }
+    }
+    if (st === 'thinking') { rx = 0.2; ry = 0.14; }
+    head.rotation.x += (rx - head.rotation.x) * Math.min(1, dt * 7);
+    head.rotation.y += (ry - head.rotation.y) * Math.min(1, dt * 7);
+    head.rotation.z = rz;
+    renderer.render(scene, camera);
+  }
+  this.build('male', 'middle');
+  resize();
+  tick();
+}
+
+/* =========================================================
+   面接官の表示（写真があれば写真、なければ3D）
+   images/male_young.jpg のように「性別_年代」の名前で置きます。
+   male / female × young / middle / senior。口を開けた画像を
+   male_young_talk.jpg の名前で置くと、話すときに口が動きます。
+   ========================================================= */
+const imgCache = {};
+function findImage(key) {
+  const usable = IMG_BASE && (!IN_GAS || /^https?:/.test(IMG_BASE));
+  if (!usable) return Promise.resolve(null);
+  if (imgCache[key]) return imgCache[key];
+  const exts = ['jpg', 'png', 'webp', 'jpeg'];
+  imgCache[key] = new Promise(function (resolve) {
+    let i = 0;
+    (function next() {
+      if (i >= exts.length) return resolve(null);
+      const url = IMG_BASE + key + '.' + exts[i++], im = new Image();
+      im.onload = function () { resolve(url); }; im.onerror = next; im.src = url;
+    })();
+  });
+  return imgCache[key];
+}
+function Face(canvas, img) {
+  // img は1枚目（通常の顔）。口を開けた顔・目を閉じた顔は同じ位置に重ねて、表示を切り替える
+  const av = new Avatar(canvas), self = this, box = img.parentNode;
+  const layer = function () { const e = document.createElement('img'); e.className = 'photo layer'; e.alt = ''; box.insertBefore(e, img.nextSibling); return e; };
+  const talkImg = layer(), blinkImg = layer();
+  let token = 0, hasTalk = false, hasBlink = false, last = performance.now();
+  let mouthTo = 0, mouth = 0, mouthUntil = 0, blinkAt = 2, blinkStart = -1e9, nodAt = 3, nodT = -1, sway = Math.random() * 10;
+  this.photo = false; this.ok = true; this.state = 'idle';
+  const calm = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const all = [img, talkImg, blinkImg];
+  function use3D() {
+    self.photo = false; all.forEach(function (e) { e.classList.remove('on'); });
+    canvas.style.display = av.ok ? '' : 'none'; if (av.ok) av.resize(); self.ok = av.ok;
+    if (!av.ok && box.classList.contains('preview')) box.style.display = 'none';
+  }
+  function preload(url) { return new Promise(function (r) { const i = new Image(); i.onload = function () { (i.decode ? i.decode() : Promise.resolve()).then(function () { r(url); }, function () { r(url); }); }; i.onerror = function () { r(null); }; i.src = url; }); }
+  this.build = function (g, a) {
+    if (av.ok) av.build(g, a);
+    const my = ++token, key = g + '_' + a;
+    hasTalk = hasBlink = false; talkImg.classList.remove('on'); blinkImg.classList.remove('on'); talkImg.style.opacity = blinkImg.style.opacity = 0;
+    findImage(key).then(function (url) {
+      if (my !== token) return;
+      if (!url) { use3D(); return; }
+      return preload(url).then(function () {
+        if (my !== token) return;
+        img.src = url; img.classList.add('on'); canvas.style.display = 'none'; self.photo = true; self.ok = true;
+        if (box.classList.contains('preview')) box.style.display = '';
+        findImage(key + '_talk').then(function (u) { if (u && my === token) preload(u).then(function () { if (my === token) { talkImg.src = u; talkImg.classList.add('on'); hasTalk = true; } }); });
+        findImage(key + '_blink').then(function (u) { if (u && my === token) preload(u).then(function () { if (my === token) { blinkImg.src = u; blinkImg.classList.add('on'); hasBlink = true; } }); });
+      });
+    });
+  };
+  this.resize = function () { if (!self.photo && av.ok) av.resize(); };
+  (function loop(now) {
+    requestAnimationFrame(loop);
+    const dt = Math.min((now - last) / 1000, 0.1); last = now;
+    if (av.ok) av.state = self.state;
+    if (!self.photo || !img.clientWidth) return;
+    const t = now / 1000 + sway, st = self.state;
+    // 呼吸・わずかな揺れ・うなずき（写真全体を動かす）
+    let y = 0, sc = 1.04, rot = 0, x = 0;
+    if (!calm) { sc += Math.sin(t * 1.25) * 0.0035; rot = Math.sin(t * 0.43) * 0.22; x = Math.sin(t * 0.31) * 1.2; }
+    if (st === 'talking' && !calm) y = Math.sin(t * 2.4) * 1.3;
+    if (st === 'listening') {
+      nodAt -= dt; if (nodAt < 0) { nodAt = 2.8 + Math.random() * 3.2; nodT = 0; }
+      if (nodT >= 0) { nodT += dt; y = Math.sin(Math.min(nodT / 0.7, 1) * Math.PI) * 8; if (nodT > 0.7) nodT = -1; }
+    }
+    if (st === 'thinking') y = 6;
+    const tf = 'translate(' + x.toFixed(2) + 'px,' + y.toFixed(2) + 'px) scale(' + sc.toFixed(4) + ') rotate(' + rot.toFixed(3) + 'deg)';
+    all.forEach(function (e) { e.style.transform = tf; });
+    // 口：話している間、音節のリズムで開き具合（0〜1）を変え、口を開けた写真の濃さで表現する
+    if (st === 'talking' && hasTalk) {
+      if (now > mouthUntil) {
+        const r = Math.random();
+        mouthTo = mouthTo > 0.3 ? (r < 0.7 ? 0 : 0.35) : (r < 0.55 ? 1 : r < 0.85 ? 0.6 : 0);
+        mouthUntil = now + 75 + Math.random() * 95 + (mouthTo === 0 && r < 0.12 ? 240 : 0);
+      }
+    } else mouthTo = 0;
+    mouth += (mouthTo - mouth) * Math.min(1, dt * 26);
+    if (hasTalk) talkImg.style.opacity = mouth < 0.02 ? 0 : mouth.toFixed(2);
+    // まばたき：閉じる→開くを約0.2秒で
+    blinkAt -= dt;
+    if (blinkAt < 0) { blinkAt = Math.random() < 0.15 ? 0.4 : 2.6 + Math.random() * 3.4; blinkStart = now; }
+    if (hasBlink) { const k = (now - blinkStart) / 200; blinkImg.style.opacity = k >= 1 ? 0 : Math.min(1, Math.sin(k * Math.PI) * 1.8).toFixed(2); }
+  })(performance.now());
+  use3D();
+}
+
+/* =========================================================
+   読み上げ
+   ========================================================= */
+const Voice = {
+  ok: 'speechSynthesis' in window,
+  voices: [],
+  load: function () { if (this.ok) this.voices = speechSynthesis.getVoices().filter(function (v) { return /^ja/i.test(v.lang); }); },
+  unlock: function () { if (!this.ok) return; try { const u = new SpeechSynthesisUtterance(' '); u.volume = 0; speechSynthesis.speak(u); } catch (e) {} },
+  speak: function (text, gender, age, done) {
+    let finished = false;
+    const end = function () { if (finished) return; finished = true; clearTimeout(timer); done(); };
+    const timer = setTimeout(end, 2500 + text.length * 260);
+    if (!this.ok) return;
+    try {
+      speechSynthesis.cancel();
+      const u = new SpeechSynthesisUtterance(text);
+      u.lang = 'ja-JP';
+      const male = /otoya|ichiro|keita|hattori|daichi|naoki|takumi|male|男/i, female = /kyoko|haruka|nanami|ayumi|sayaka|o-?ren|mayu|shiori|female|女/i;
+      const want = gender === 'male' ? male : female;
+      const hit = this.voices.filter(function (v) { return want.test(v.name); })[0];
+      const v = hit || this.voices[0];
+      if (v) u.voice = v;
+      const base = gender === 'male' ? (hit ? 0.95 : 0.6) : (hit ? 1.05 : 1.25);
+      u.pitch = base + (age === 'young' ? 0.1 : age === 'senior' ? -0.12 : 0);
+      u.rate = age === 'senior' ? 0.92 : age === 'young' ? 1.05 : 1.0;
+      u.onend = end; u.onerror = end;
+      speechSynthesis.speak(u);
+    } catch (e) { end(); }
+  },
+  stop: function () { if (this.ok) try { speechSynthesis.cancel(); } catch (e) {} }
+};
+if (Voice.ok) { Voice.load(); speechSynthesis.onvoiceschanged = function () { Voice.load(); }; }
+
+/* =========================================================
+   画面の制御
+   ========================================================= */
+const $ = function (id) { return document.getElementById(id); };
+const TYPES = { job: { label: '就職試験', target: '志望先（企業名・職種）' }, ao: { label: '総合型選抜', target: '志望先（大学・学部・学科）' }, suisen: { label: '学校推薦型選抜', target: '志望先（大学・学部・学科）' } };
+const S = { studentId: '', type: 'job', target: '', memo: '', gender: 'male', age: 'middle', total: 6, history: [] };
+let current = '', stream = null, recorder = null, chunks = [], recStart = 0, recTimer = null, answerSec = 0, micOK = false;
+
+const pvAvatar = new Face($('pv'), $('pvPhoto'));
+let avatar = null;
+pvAvatar.build(S.gender, S.age);
+if (!IN_GAS && API_URL) $('codeRow').style.display = '';
+
+function seg(id, key, after) {
+  $(id).addEventListener('click', function (e) {
+    const b = e.target.closest('button'); if (!b) return;
+    Array.prototype.forEach.call($(id).children, function (c) { c.classList.toggle('on', c === b); });
+    S[key] = key === 'total' ? parseInt(b.dataset.v, 10) : b.dataset.v;
+    if (after) after();
+  });
+}
+seg('segType', 'type', function () { $('targetLabel').textContent = TYPES[S.type].target; });
+seg('segTotal', 'total');
+seg('segGender', 'gender', function () { if (pvAvatar.ok) pvAvatar.build(S.gender, S.age); });
+seg('segAge', 'age', function () { if (pvAvatar.ok) pvAvatar.build(S.gender, S.age); });
+
+function show(id) {
+  ['setup', 'interview', 'result'].forEach(function (s) { $(s).classList.toggle('on', s === id); });
+  window.scrollTo(0, 0);
+}
+function setAI(state, label) { if (avatar) avatar.state = state; $('aiStatus').textContent = label; $('aiStatus').classList.toggle('talk', state === 'talking'); }
+function buttons(list) {
+  const box = $('btns'); box.innerHTML = '';
+  list.forEach(function (b) {
+    const el = document.createElement('button');
+    el.type = 'button'; el.textContent = b.t; if (b.c) el.className = b.c; if (b.off) el.disabled = true; if (b.label) { el.setAttribute('aria-label', b.label); el.title = b.label; }
+    el.addEventListener('click', b.f); box.appendChild(el);
+  });
+}
+function answerBox(on, text, hint) {
+  $('answerBox').classList.toggle('on', !!on);
+  if (on) { $('answer').value = text || ''; $('answerHint').textContent = hint || ''; }
+}
+
+$('btnStart').addEventListener('click', async function () {
+  accessCode = $('code').value.trim(); S.studentId = $('sid').value.trim(); S.target = $('target').value.trim(); S.memo = $('memo').value.trim(); S.history = [];
+  if (!S.studentId) { $('setupErr').textContent = '生徒番号を入力してください。'; $('sid').focus(); return; }
+  $('setupErr').textContent = '';
+  Voice.unlock();
+  $('btnStart').disabled = true;
+  await openMedia();
+  $('btnStart').disabled = false;
+  $('typeTag').textContent = TYPES[S.type].label;
+  show('interview');
+  if (!avatar) avatar = new Face($('av'), $('avPhoto'));
+  if (avatar.ok) { avatar.build(S.gender, S.age); avatar.resize(); }
+  ask();
+});
+
+let mediaNote = '';
+function mediaReason(e) {
+  const n = e && e.name;
+  if (n === 'NotAllowedError' || n === 'SecurityError') return IN_GAS
+    ? 'この開き方（GASのURL）では、カメラとマイクがブロックされます。'
+    : 'カメラとマイクが許可されていません。アドレスバーの設定から許可して、ページを開き直してください。';
+  if (n === 'NotFoundError' || n === 'OverconstrainedError') return 'カメラまたはマイクが見つかりません。';
+  if (n === 'NotReadableError' || n === 'AbortError') return 'カメラまたはマイクを、ほかのアプリが使っています。';
+  return 'カメラとマイクを使えませんでした（' + (n || '不明') + '）。';
+}
+async function openMedia() {
+  micOK = false; mediaNote = ''; stream = null;
+  if (!window.isSecureContext || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    mediaNote = 'このブラウザではカメラとマイクを使えません。SafariかChromeで開いてください。'; showMediaNote(); return;
+  }
+  const audio = { echoCancellation: true, noiseSuppression: true };
+  const video = { facingMode: 'user', width: { ideal: 640 } };
+  let err = null;
+  try { stream = await navigator.mediaDevices.getUserMedia({ audio: audio, video: video }); }
+  catch (e) {
+    err = e;
+    // 片方だけでも使えるか、別々に試す
+    let a = null, v = null;
+    try { a = await navigator.mediaDevices.getUserMedia({ audio: audio }); } catch (e2) { err = e2; }
+    try { v = await navigator.mediaDevices.getUserMedia({ video: video }); } catch (e3) {}
+    if (a || v) { stream = new MediaStream([].concat(a ? a.getTracks() : [], v ? v.getTracks() : [])); }
+  }
+  const hasA = !!stream && stream.getAudioTracks().length > 0, hasV = !!stream && stream.getVideoTracks().length > 0;
+  micOK = hasA && typeof MediaRecorder !== 'undefined';
+  if (hasV) { $('cam').srcObject = new MediaStream(stream.getVideoTracks()); $('nocam').style.display = 'none'; const p = $('cam').play(); if (p && p.catch) p.catch(function () {}); }
+  if (!hasA || !hasV) mediaNote = (err ? mediaReason(err) : '') + (hasA ? '（マイクは使えます）' : hasV ? '（カメラは使えます。回答は文字で入力してください）' : ' 回答は文字で入力してください。');
+  if (hasA && !micOK) mediaNote = 'このブラウザは録音に対応していません。回答は文字で入力してください。';
+  showMediaNote();
+}
+function showMediaNote() { $('nocam').textContent = mediaNote || 'カメラは使われていません'; }
+function closeMedia() {
+  if (stream) stream.getTracks().forEach(function (t) { t.stop(); });
+  stream = null; $('cam').srcObject = null; $('nocam').style.display = ''; $('nocam').textContent = 'カメラは使われていません';
+}
+
+/* ---- 質問を受け取って読み上げる ---- */
+async function ask() {
+  const n = S.history.length + 1;
+  $('progress').textContent = '質問 ' + n + ' / ' + S.total;
+  answerBox(false);
+  $('qtext').textContent = n === 1 ? '面接官が入室します…' : '面接官がメモを取っています…';
+  setAI('thinking', n === 1 ? '準備中' : '考え中');
+  buttons([]);
+  try {
+    const r = await api('nextQuestion', S);
+    current = r.question;
+    sayQuestion();
+  } catch (e) {
+    $('qtext').textContent = e.message;
+    setAI('idle', '待機中');
+    buttons([{ t: 'もう一度試す', c: 'fill', f: ask }, { t: 'ここで終わる', c: 'ghost', f: finish }]);
+  }
+}
+function sayQuestion() {
+  $('qtext').innerHTML = '';
+  const b = document.createElement('b'); b.textContent = 'Q' + (S.history.length + 1);
+  $('qtext').appendChild(b); $('qtext').appendChild(document.createTextNode(current));
+  setAI('talking', '質問中');
+  buttons([{ t: '読み上げを飛ばす', c: 'ghost', f: function () { Voice.stop(); ready(); } }]);
+  let done = false;
+  Voice.speak(current, S.gender, S.age, function () { if (!done) { done = true; if (avatar && avatar.state === 'talking') ready(); } });
+  if (!Voice.ok) setTimeout(ready, 1200);
+}
+function ready() {
+  setAI('listening', '回答を待っています');
+  answerBox(false);
+  buttons([
+    { t: '🎤 話して答える', c: 'fill', f: startRec, off: !micOK },
+    { t: '⌨ 文字で答える', f: function () { typeAnswer('', ''); } },
+    { t: '🔁', label: 'もう一度聞く', c: 'ghost', f: sayQuestion }
+  ]);
+  if (!micOK) $('qtext').appendChild(hintNode('　※' + (mediaNote || 'マイクが使えないため、文字で答えてください。')));
+}
+function hintNode(t) { const s = document.createElement('span'); s.style.cssText = 'color:#5b6b7c;font-size:13px'; s.textContent = t; return s; }
+
+/* ---- 録音 ---- */
+function startRec() {
+  Voice.stop();
+  const types = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg;codecs=opus'];
+  const mime = types.filter(function (t) { return MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(t); })[0];
+  try {
+    recorder = new MediaRecorder(new MediaStream(stream.getAudioTracks()), mime ? { mimeType: mime, audioBitsPerSecond: 32000 } : undefined);
+  } catch (e) { micOK = false; ready(); return; }
+  chunks = [];
+  recorder.ondataavailable = function (e) { if (e.data && e.data.size) chunks.push(e.data); };
+  recorder.onstop = onRecStop;
+  recorder.start();
+  recStart = Date.now();
+  $('rec').classList.add('on');
+  recTimer = setInterval(function () {
+    const s = Math.floor((Date.now() - recStart) / 1000);
+    $('recTime').textContent = Math.floor(s / 60) + ':' + ('0' + s % 60).slice(-2);
+    if (s >= 120) stopRec();
+  }, 250);
+  setAI('listening', '聞いています');
+  buttons([{ t: '■ 話し終わった', c: 'stop', f: stopRec }]);
+}
+function stopRec() { if (recorder && recorder.state !== 'inactive') recorder.stop(); }
+async function onRecStop() {
+  clearInterval(recTimer); $('rec').classList.remove('on'); $('recTime').textContent = '0:00';
+  answerSec = Math.round((Date.now() - recStart) / 1000);
+  const blob = new Blob(chunks, { type: recorder.mimeType || 'audio/webm' });
+  if (answerSec < 2 || blob.size < 1500) { ready(); $('qtext').appendChild(hintNode('　※録音が短すぎました。もう一度話してください。')); return; }
+  setAI('thinking', '聞き取り中');
+  buttons([{ t: '声を文字にしています…', c: 'ghost', f: function () {}, off: true }]);
+  try {
+    const b64 = await new Promise(function (res, rej) {
+      const fr = new FileReader(); fr.onload = function () { res(String(fr.result).split(',')[1]); }; fr.onerror = rej; fr.readAsDataURL(blob);
+    });
+    const r = await api('transcribe', b64, blob.type);
+    typeAnswer(r.text, '聞き取った内容です（約' + answerSec + '秒）。違うところは直してから送ってください。', answerSec);
+  } catch (e) {
+    typeAnswer('', e.message, 0);
+  }
+}
+
+/* ---- 回答の確認・送信 ---- */
+function typeAnswer(text, hint, sec) {
+  setAI('listening', '回答を待っています');
+  answerBox(true, text, hint);
+  if (!text) $('answer').focus();
+  const list = [{ t: 'この内容で答える', c: 'fill', f: function () { submit(sec || 0); } }];
+  if (micOK) list.push({ t: '🎤 録り直す', f: function () { answerBox(false); startRec(); } });
+  list.push({ t: '戻る', c: 'ghost', f: ready });
+  buttons(list);
+}
+function submit(sec) {
+  const a = $('answer').value.trim();
+  if (!a) { $('answerHint').textContent = '回答を入力してください。'; return; }
+  S.history.push({ q: current, a: a, sec: sec });
+  if (S.history.length >= S.total) closing(); else ask();
+}
+function closing() {
+  answerBox(false); buttons([]);
+  const bye = '以上で面接を終わります。お疲れさまでした。';
+  $('qtext').textContent = bye;
+  setAI('talking', '終了');
+  let done = false;
+  Voice.speak(bye, S.gender, S.age, function () { if (!done) { done = true; finish(); } });
+  if (!Voice.ok) setTimeout(finish, 1500);
+}
+
+/* ---- 講評 ---- */
+async function finish() {
+  Voice.stop(); closeMedia(); show('result');
+  const body = $('resultBody');
+  if (!S.history.length) { backToSetup(); return; }
+  body.innerHTML = '<div class="loading"><div class="spin"></div>講評を作っています…（30秒ほどかかることがあります）</div>';
+  let fb;
+  try { fb = await api('finishInterview', S); }
+  catch (e) {
+    body.innerHTML = '';
+    const c = card('講評を作れませんでした'); c.appendChild(el('p', 'overall', e.message)); body.appendChild(c);
+    const again = el('button', 'primary', 'もう一度試す'); again.type = 'button'; again.addEventListener('click', finish); body.appendChild(again);
+    return;
+  }
+  body.innerHTML = '';
+  let c = card('全体の講評'); c.appendChild(el('p', 'overall', fb.overall || '')); body.appendChild(c);
+
+  const sc = fb.scores || {}, keys = Object.keys(sc);
+  if (keys.length) {
+    c = card('観点ごとの評価', '5段階');
+    const g = el('div', 'scores');
+    keys.forEach(function (k) {
+      const v = Math.max(0, Math.min(5, Number(sc[k]) || 0));
+      const r = el('div', 'score'); r.appendChild(el('span', '', k));
+      const bar = el('div', 'bar'); const i = document.createElement('i'); i.style.width = (v * 20) + '%'; bar.appendChild(i); r.appendChild(bar);
+      r.appendChild(el('em', '', v + '/5')); g.appendChild(r);
+    });
+    c.appendChild(g); body.appendChild(c);
+  }
+  if (fb.next && fb.next.length) {
+    c = card('次の練習で意識すること');
+    const ul = el('ul', 'next'); fb.next.forEach(function (t) { ul.appendChild(el('li', '', t)); }); c.appendChild(ul); body.appendChild(c);
+  }
+  c = card('質問ごとのふり返り');
+  S.history.forEach(function (h, i) {
+    const it = (fb.items || [])[i] || {};
+    const d = el('div', 'qa');
+    d.appendChild(el('p', 'q', 'Q' + (i + 1) + '　' + h.q));
+    d.appendChild(el('p', 'a', h.a + (h.sec ? '\n（約' + h.sec + '秒）' : '')));
+    const dl = document.createElement('dl');
+    [['良い点', it.good], ['改善点', it.improve], ['言い換え', it.example]].forEach(function (p) {
+      if (!p[1]) return; dl.appendChild(el('dt', '', p[0])); dl.appendChild(el('dd', '', p[1]));
+    });
+    d.appendChild(dl); c.appendChild(d);
+  });
+  body.appendChild(c);
+  body.appendChild(el('p', 'note', '表情・姿勢・声の大きさ・入退室の動きは、このアプリでは確認できません。先生との練習で見てもらいましょう。'));
+  const again = el('button', 'primary', 'もう一度練習する'); again.type = 'button'; again.addEventListener('click', backToSetup); body.appendChild(again);
+}
+function backToSetup() { S.history = []; show('setup'); if (pvAvatar.ok) pvAvatar.resize(); }
+function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
+function card(title, small) {
+  const c = el('div', 'card'); const h = el('h2', '', title);
+  if (small) h.appendChild(el('small', '', small)); c.appendChild(h); return c;
+}
+</script>
+</body>
+</html>
