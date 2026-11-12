@@ -762,8 +762,9 @@ const Voice = {
     if (!this.ok) return;
     try {
       speechSynthesis.cancel();
+      try { speechSynthesis.resume(); } catch (e) {}
       const u = new SpeechSynthesisUtterance(text);
-      u.lang = 'ja-JP';
+      u.lang = 'ja-JP'; u.volume = 1;
       const male = /otoya|ichiro|keita|hattori|daichi|naoki|takumi|male|男/i, female = /kyoko|haruka|nanami|ayumi|sayaka|o-?ren|mayu|shiori|female|女/i;
       const want = gender === 'male' ? male : female;
       const hit = this.voices.filter(function (v) { return want.test(v.name); })[0];
@@ -849,28 +850,25 @@ function mediaReason(e) {
   if (n === 'NotReadableError' || n === 'AbortError') return 'カメラまたはマイクを、ほかのアプリが使っています。';
   return 'カメラとマイクを使えませんでした（' + (n || '不明') + '）。';
 }
+const AUDIO_OPT = { echoCancellation: true, noiseSuppression: true, autoGainControl: true };
+let micStream = null;
 async function openMedia() {
   micOK = false; mediaNote = ''; stream = null;
   if (!window.isSecureContext || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
     mediaNote = 'このブラウザではカメラとマイクを使えません。SafariかChromeで開いてください。'; showMediaNote(); return;
   }
-  const audio = { echoCancellation: true, noiseSuppression: true };
-  const video = { facingMode: 'user', width: { ideal: 640 } };
   let err = null;
-  try { stream = await navigator.mediaDevices.getUserMedia({ audio: audio, video: video }); }
-  catch (e) {
-    err = e;
-    // 片方だけでも使えるか、別々に試す
-    let a = null, v = null;
-    try { a = await navigator.mediaDevices.getUserMedia({ audio: audio }); } catch (e2) { err = e2; }
-    try { v = await navigator.mediaDevices.getUserMedia({ video: video }); } catch (e3) {}
-    if (a || v) { stream = new MediaStream([].concat(a ? a.getTracks() : [], v ? v.getTracks() : [])); }
-  }
-  const hasA = !!stream && stream.getAudioTracks().length > 0, hasV = !!stream && stream.getVideoTracks().length > 0;
-  micOK = hasA && typeof MediaRecorder !== 'undefined';
+  // マイクは許可だけ確認してすぐ止める（つけっぱなしだと、スマホで面接官の声が小さく・聞こえなくなるため）。録音のたびに開き直す
+  try {
+    const a = await navigator.mediaDevices.getUserMedia({ audio: AUDIO_OPT });
+    a.getTracks().forEach(function (t) { t.stop(); });
+    micOK = typeof MediaRecorder !== 'undefined';
+  } catch (e) { err = e; }
+  try { stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: { ideal: 640 } } }); }
+  catch (e) { if (!err) err = e; }
+  const hasV = !!stream && stream.getVideoTracks().length > 0;
   if (hasV) { await pickCamera(); showVideo(); }
-  if (!hasA || !hasV) mediaNote = (err ? mediaReason(err) : '') + (hasA ? '（マイクは使えます）' : hasV ? '（カメラは使えます。回答は文字で入力してください）' : ' 回答は文字で入力してください。');
-  if (hasA && !micOK) mediaNote = 'このブラウザは録音に対応していません。回答は文字で入力してください。';
+  if (!micOK || !hasV) mediaNote = (err ? mediaReason(err) : '') + (micOK ? '（マイクは使えます）' : hasV ? '（カメラは使えます。回答は文字で入力してください）' : ' 回答は文字で入力してください。');
   showMediaNote();
 }
 /* ---- カメラの選択 ----
@@ -889,24 +887,21 @@ async function pickCamera() {
   try { cams = (await navigator.mediaDevices.enumerateDevices()).filter(function (d) { return d.kind === 'videoinput'; }); } catch (e) { cams = []; }
   $('camSw').classList.toggle('on', cams.length > 1);
   if (cams.length < 2) return;
-  const cur = stream.getVideoTracks()[0], curId = cur && cur.getSettings ? cur.getSettings().deviceId : '';
+  const cur = stream.getVideoTracks()[0], st = cur && cur.getSettings ? cur.getSettings() : {};
+  camIdx = Math.max(0, cams.findIndex(function (c) { return c.deviceId === st.deviceId; }));
   let saved = ''; try { saved = localStorage.getItem(CAM_KEY) || ''; } catch (e) {}
-  let want = cams.findIndex(function (c) { return c.deviceId === saved; });
-  if (want < 0) {
-    const facing = cur && cur.getSettings ? cur.getSettings().facingMode : '';
-    if (facing === 'user') want = cams.findIndex(function (c) { return c.deviceId === curId; });
-  }
-  if (want < 0) { want = 0; cams.forEach(function (c, i) { if (camScore(c) > camScore(cams[want])) want = i; }); }
-  camIdx = want;
-  if (cams[want].deviceId !== curId) await useCamera(cams[want].deviceId);
-  else camIdx = Math.max(0, cams.findIndex(function (c) { return c.deviceId === curId; }));
+  const si = cams.findIndex(function (c) { return c.deviceId === saved; });
+  if (si >= 0 && si !== camIdx) { if (await useCamera(cams[si].deviceId)) camIdx = si; return; }
+  // スマホで前面カメラが選ばれている、またはPCで普通のカメラが選ばれているときは、切り替えない
+  if (st.facingMode === 'user' || camScore(cams[camIdx]) >= 0) return;
+  let best = camIdx; cams.forEach(function (c, i) { if (camScore(c) > camScore(cams[best])) best = i; });
+  if (best !== camIdx && await useCamera(cams[best].deviceId)) camIdx = best;
 }
 async function useCamera(id) {
   try {
     const v = await navigator.mediaDevices.getUserMedia({ video: { deviceId: { exact: id }, width: { ideal: 640 } } });
     stream.getVideoTracks().forEach(function (t) { t.stop(); stream.removeTrack(t); });
     stream.addTrack(v.getVideoTracks()[0]);
-    try { localStorage.setItem(CAM_KEY, id); } catch (e) {}
     return true;
   } catch (e) { return false; }
 }
@@ -918,12 +913,13 @@ $('camSw').addEventListener('click', async function () {
   if (!stream || cams.length < 2) return;
   for (let k = 1; k <= cams.length; k++) {
     const i = (camIdx + k) % cams.length;
-    if (await useCamera(cams[i].deviceId)) { camIdx = i; showVideo(); return; }
+    if (await useCamera(cams[i].deviceId)) { camIdx = i; try { localStorage.setItem(CAM_KEY, cams[i].deviceId); } catch (e) {} showVideo(); return; }
   }
 });
 function showMediaNote() { $('nocam').textContent = mediaNote || 'カメラは使われていません'; }
 function closeMedia() {
   $('camSw').classList.remove('on');
+  if (micStream) micStream.getTracks().forEach(function (t) { t.stop(); }); micStream = null;
   if (stream) stream.getTracks().forEach(function (t) { t.stop(); });
   stream = null; $('cam').srcObject = null; $('nocam').style.display = ''; $('nocam').textContent = 'カメラは使われていません';
 }
@@ -969,17 +965,20 @@ function ready() {
 function hintNode(t) { const s = document.createElement('span'); s.style.cssText = 'color:#5b6b7c;font-size:13px'; s.textContent = t; return s; }
 
 /* ---- 録音 ---- */
-function startRec() {
+async function startRec() {
   Voice.stop();
+  buttons([{ t: 'マイクを準備しています…', c: 'ghost', f: function () {}, off: true }]);
+  try { micStream = await navigator.mediaDevices.getUserMedia({ audio: AUDIO_OPT }); }
+  catch (e) { micOK = false; mediaNote = mediaReason(e) + ' 回答は文字で入力してください。'; ready(); return; }
   const types = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg;codecs=opus'];
   const mime = types.filter(function (t) { return MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(t); })[0];
   try {
-    recorder = new MediaRecorder(new MediaStream(stream.getAudioTracks()), mime ? { mimeType: mime, audioBitsPerSecond: 32000 } : undefined);
-  } catch (e) { micOK = false; ready(); return; }
+    recorder = new MediaRecorder(micStream, mime ? { mimeType: mime, audioBitsPerSecond: 32000 } : undefined);
+  } catch (e) { releaseMic(); micOK = false; ready(); return; }
   chunks = [];
   recorder.ondataavailable = function (e) { if (e.data && e.data.size) chunks.push(e.data); };
   recorder.onstop = onRecStop;
-  recorder.start();
+  recorder.start(1000);   // 1秒ごとにデータを受け取る（途中で止まっても、それまでの録音を残す）
   recStart = Date.now();
   $('rec').classList.add('on');
   recTimer = setInterval(function () {
@@ -990,12 +989,15 @@ function startRec() {
   setAI('listening', '聞いています');
   buttons([{ t: '■ 話し終わった', c: 'stop', f: stopRec }]);
 }
+function releaseMic() { if (micStream) micStream.getTracks().forEach(function (t) { t.stop(); }); micStream = null; }
 function stopRec() { if (recorder && recorder.state !== 'inactive') recorder.stop(); }
 async function onRecStop() {
+  releaseMic();
   clearInterval(recTimer); $('rec').classList.remove('on'); $('recTime').textContent = '0:00';
   answerSec = Math.round((Date.now() - recStart) / 1000);
   const blob = new Blob(chunks, { type: recorder.mimeType || 'audio/webm' });
-  if (answerSec < 2 || blob.size < 1500) { ready(); $('qtext').appendChild(hintNode('　※録音が短すぎました。もう一度話してください。')); return; }
+  if (answerSec < 2) { ready(); $('qtext').appendChild(hintNode('　※録音が短すぎました。もう一度話してください。')); return; }
+  if (blob.size < 1500) { ready(); $('qtext').appendChild(hintNode('　※声が録音できませんでした。マイクがほかのアプリで使われていないか確認して、もう一度話すか、文字で答えてください。')); return; }
   setAI('thinking', '聞き取り中');
   buttons([{ t: '声を文字にしています…', c: 'ghost', f: function () {}, off: true }]);
   try {
@@ -1003,6 +1005,7 @@ async function onRecStop() {
       const fr = new FileReader(); fr.onload = function () { res(String(fr.result).split(',')[1]); }; fr.onerror = rej; fr.readAsDataURL(blob);
     });
     const r = await api('transcribe', b64, blob.type);
+    if (!r.text) { typeAnswer('', '声を聞き取れませんでした。マイクに近づいてもう一度録るか、文字で入力してください。', 0); return; }
     typeAnswer(r.text, '聞き取った内容です（約' + answerSec + '秒）。違うところは直してから送ってください。', answerSec);
   } catch (e) {
     typeAnswer('', e.message, 0);
