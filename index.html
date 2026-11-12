@@ -37,6 +37,8 @@
   .photo.on { display:block; }
   .photo.layer { z-index:1; opacity:0; }
   .pill, .status, .rec { z-index:2; }
+  .camsw { position:absolute; top:8px; left:8px; z-index:3; display:none; border:0; border-radius:999px; padding:5px 12px; background:rgba(20,28,40,.72); color:#fff; font-size:13px; font-weight:700; cursor:pointer; }
+  .camsw.on { display:block; }
   .status.talk::after { content:""; display:inline-block; width:14px; height:10px; margin-left:6px; background:
     linear-gradient(var(--blue),var(--blue)) 0 100%/3px 60% no-repeat, linear-gradient(var(--blue),var(--blue)) 5.5px 100%/3px 100% no-repeat, linear-gradient(var(--blue),var(--blue)) 11px 100%/3px 40% no-repeat; animation:bars .5s steps(2) infinite; }
   @keyframes bars { 50% { transform:scaleY(.55); transform-origin:bottom; } }
@@ -191,6 +193,7 @@
     <div class="pane" id="paneMe">
       <video id="cam" autoplay playsinline muted></video>
       <div class="nocam" id="nocam">カメラは使われていません</div>
+      <button type="button" class="camsw" id="camSw" aria-label="カメラを切り替える" title="カメラを切り替える">📷 切替</button>
       <span class="rec" id="rec">● 録音中 <span id="recTime">0:00</span></span>
       <span class="pill">あなた</span>
     </div>
@@ -865,13 +868,62 @@ async function openMedia() {
   }
   const hasA = !!stream && stream.getAudioTracks().length > 0, hasV = !!stream && stream.getVideoTracks().length > 0;
   micOK = hasA && typeof MediaRecorder !== 'undefined';
-  if (hasV) { $('cam').srcObject = new MediaStream(stream.getVideoTracks()); $('nocam').style.display = 'none'; const p = $('cam').play(); if (p && p.catch) p.catch(function () {}); }
+  if (hasV) { await pickCamera(); showVideo(); }
   if (!hasA || !hasV) mediaNote = (err ? mediaReason(err) : '') + (hasA ? '（マイクは使えます）' : hasV ? '（カメラは使えます。回答は文字で入力してください）' : ' 回答は文字で入力してください。');
   if (hasA && !micOK) mediaNote = 'このブラウザは録音に対応していません。回答は文字で入力してください。';
   showMediaNote();
 }
+/* ---- カメラの選択 ----
+   PCでは facingMode（前面カメラの指定）が効かず、書画カメラや赤外線カメラが選ばれることがある。
+   許可をもらった後にカメラの一覧を見て、前面カメラらしいものを選ぶ。切替ボタンで手動でも選べる */
+let cams = [], camIdx = 0;
+const CAM_KEY = 'mensetsu_cam';
+function camScore(c) {
+  const l = (c.label || '').toLowerCase();
+  let sc = 0;
+  if (/front|user|前面|内蔵|integrated|built-in|facetime|webcam|hd camera|usb camera/.test(l)) sc += 2;
+  if (/back|rear|背面|environment|\bir\b|infrared|赤外線|virtual|仮想|obs|document|書画|elmo|snapcam|droid/.test(l)) sc -= 3;
+  return sc;
+}
+async function pickCamera() {
+  try { cams = (await navigator.mediaDevices.enumerateDevices()).filter(function (d) { return d.kind === 'videoinput'; }); } catch (e) { cams = []; }
+  $('camSw').classList.toggle('on', cams.length > 1);
+  if (cams.length < 2) return;
+  const cur = stream.getVideoTracks()[0], curId = cur && cur.getSettings ? cur.getSettings().deviceId : '';
+  let saved = ''; try { saved = localStorage.getItem(CAM_KEY) || ''; } catch (e) {}
+  let want = cams.findIndex(function (c) { return c.deviceId === saved; });
+  if (want < 0) {
+    const facing = cur && cur.getSettings ? cur.getSettings().facingMode : '';
+    if (facing === 'user') want = cams.findIndex(function (c) { return c.deviceId === curId; });
+  }
+  if (want < 0) { want = 0; cams.forEach(function (c, i) { if (camScore(c) > camScore(cams[want])) want = i; }); }
+  camIdx = want;
+  if (cams[want].deviceId !== curId) await useCamera(cams[want].deviceId);
+  else camIdx = Math.max(0, cams.findIndex(function (c) { return c.deviceId === curId; }));
+}
+async function useCamera(id) {
+  try {
+    const v = await navigator.mediaDevices.getUserMedia({ video: { deviceId: { exact: id }, width: { ideal: 640 } } });
+    stream.getVideoTracks().forEach(function (t) { t.stop(); stream.removeTrack(t); });
+    stream.addTrack(v.getVideoTracks()[0]);
+    try { localStorage.setItem(CAM_KEY, id); } catch (e) {}
+    return true;
+  } catch (e) { return false; }
+}
+function showVideo() {
+  $('cam').srcObject = new MediaStream(stream.getVideoTracks()); $('nocam').style.display = 'none';
+  const p = $('cam').play(); if (p && p.catch) p.catch(function () {});
+}
+$('camSw').addEventListener('click', async function () {
+  if (!stream || cams.length < 2) return;
+  for (let k = 1; k <= cams.length; k++) {
+    const i = (camIdx + k) % cams.length;
+    if (await useCamera(cams[i].deviceId)) { camIdx = i; showVideo(); return; }
+  }
+});
 function showMediaNote() { $('nocam').textContent = mediaNote || 'カメラは使われていません'; }
 function closeMedia() {
+  $('camSw').classList.remove('on');
   if (stream) stream.getTracks().forEach(function (t) { t.stop(); });
   stream = null; $('cam').srcObject = null; $('nocam').style.display = ''; $('nocam').textContent = 'カメラは使われていません';
 }
