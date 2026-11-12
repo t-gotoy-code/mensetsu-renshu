@@ -2,19 +2,14 @@
  * AI面接練習アプリ（GAS + Groq）
  *
  * 【初期設定】
- * 1. 記録用のスプレッドシートを新規作成し、「拡張機能 → Apps Script」を開く
- * 2. このファイル（Code.gs）と index.html を貼り付ける
- * 3. 「プロジェクトの設定 → スクリプト プロパティ」に
- *      プロパティ名: GROQ_API_KEY   値: Groqで発行したAPIキー
- *    を追加する
- * 4. 関数 setup を1回実行する（記録用シートが作られます）
- * 5. 「デプロイ → 新しいデプロイ → ウェブアプリ」で公開する
- *    （実行ユーザー：自分 ／ アクセスできるユーザー：全員）
- * 6. 発行されたURL（…/exec）を index.html の API_URL に貼り付け、
- *    index.html と images フォルダをGAS以外の場所（GitHub Pagesなど）に置く
- *    ※GASのURLで直接開くと、カメラとマイクがブロックされるため
- * 7. （任意）スクリプト プロパティに ACCESS_CODE を登録すると、
- *    その合言葉を入力した人だけが使えるようになります
+ * 1. 記録用のスプレッドシートで「拡張機能 → Apps Script」を開き、このファイルの中身を貼り付ける
+ *    （index.html はGASには不要。画面は GitHub Pages に置いています）
+ * 2. 「プロジェクトの設定 → スクリプト プロパティ」に GROQ_API_KEY（GroqのAPIキー）を登録する
+ *    （任意）ACCESS_CODE を登録すると、その合言葉を入力した人だけが使えます
+ * 3. 関数 setup を1回実行する（「記録」「明細」シートが作られます）
+ * 4. 「デプロイ → 新しいデプロイ → ウェブアプリ」
+ *    実行ユーザー：自分 ／ アクセスできるユーザー：全員
+ * 5. 発行されたURL（…/exec）を index.html の API_URL に設定する
  */
 
 // ===== 設定（ここを書き換えるだけで調整できます） =====
@@ -53,10 +48,15 @@ const AGE_LABEL = { young: '20代後半の若手', middle: '40代の中堅', sen
 const GENDER_LABEL = { male: '男性', female: '女性' };
 
 // ===== 画面 =====
+const APP_URL = 'https://t-gotoy-code.github.io/mensetsu-renshu/';
+
+/** GASのURLを直接開いた人を、公開ページへ案内する（GAS上ではカメラとマイクが使えないため） */
 function doGet() {
-  return HtmlService.createHtmlOutputFromFile('index')
-    .setTitle('AI面接練習')
-    .addMetaTag('viewport', 'width=device-width, initial-scale=1, viewport-fit=cover');
+  return HtmlService.createHtmlOutput(
+    '<meta name="viewport" content="width=device-width,initial-scale=1">' +
+    '<p style="font-family:sans-serif;font-size:18px;padding:24px">面接練習は次のページで行います。<br><br>' +
+    '<a href="' + APP_URL + '" target="_top">' + APP_URL + '</a></p>'
+  ).setTitle('AI面接練習');
 }
 
 /** GAS以外の場所に置いた index.html からの呼び出し口 */
