@@ -695,7 +695,7 @@ function Face(canvas, img) {
   this.build = function (g, a) {
     if (av.ok) av.build(g, a);
     const my = ++token, key = g + '_' + a;
-    hasTalk = hasBlink = false; talkImg.classList.remove('on'); blinkImg.classList.remove('on'); talkImg.style.opacity = blinkImg.style.opacity = 0;
+    hasTalk = hasBlink = false; talkImg.classList.remove('on'); blinkImg.classList.remove('on'); talkImg.style.opacity = blinkImg.style.opacity = 0; talkImg.removeAttribute('src'); blinkImg.removeAttribute('src');
     findImage(key).then(function (url) {
       if (my !== token) return;
       if (!url) { use3D(); return; }
